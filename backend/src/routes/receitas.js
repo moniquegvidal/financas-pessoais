@@ -1,0 +1,11 @@
+import {Router} from 'express';
+import {pool} from '../db.js';
+import {auth} from '../middleware/auth.js';
+const router=Router();
+const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||'');
+const validMonth=m=>/^\d{4}-(0[1-9]|1[0-2])$/.test(m||'');
+router.get('/',auth,async(req,res)=>{const mes=req.query.mes;if(!validMonth(mes))return res.status(400).json({erro:'Mês inválido.'});const [rows]=await pool.query("SELECT id,nome,valor,data FROM receitas WHERE usuario_id=? AND DATE_FORMAT(data,'%Y-%m')=? ORDER BY data DESC,id DESC",[req.user.id,mes]);res.json(rows)});
+router.post('/',auth,async(req,res)=>{const {nome,valor,data}=req.body;if(!nome?.trim()||!Number.isFinite(Number(valor))||Number(valor)<=0||!validDate(data))return res.status(400).json({erro:'Preencha a receita corretamente.'});const [r]=await pool.query('INSERT INTO receitas(usuario_id,nome,valor,data) VALUES(?,?,?,?)',[req.user.id,nome.trim(),Number(valor),data]);res.status(201).json({id:r.insertId,nome:nome.trim(),valor:Number(valor),data})});
+router.put('/:id',auth,async(req,res)=>{const {nome,valor,data}=req.body;if(!nome?.trim()||!Number.isFinite(Number(valor))||Number(valor)<=0||!validDate(data))return res.status(400).json({erro:'Preencha a receita corretamente.'});const [r]=await pool.query('UPDATE receitas SET nome=?,valor=?,data=? WHERE id=? AND usuario_id=?',[nome.trim(),Number(valor),data,req.params.id,req.user.id]);if(!r.affectedRows)return res.status(404).json({erro:'Receita não encontrada.'});res.json({id:Number(req.params.id),nome:nome.trim(),valor:Number(valor),data})});
+router.delete('/:id',auth,async(req,res)=>{const [r]=await pool.query('DELETE FROM receitas WHERE id=? AND usuario_id=?',[req.params.id,req.user.id]);if(!r.affectedRows)return res.status(404).json({erro:'Receita não encontrada.'});res.json({mensagem:'Receita excluída.'})});
+export default router;

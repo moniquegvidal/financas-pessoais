@@ -1,0 +1,12 @@
+import {Router} from 'express';
+import {pool} from '../db.js';
+import {auth} from '../middleware/auth.js';
+const router=Router();
+const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||'');
+const validate=b=>{if(!b.nome?.trim()||!Number.isInteger(Number(b.categoria_id))||Number(b.categoria_id)<1||!Number.isFinite(Number(b.valor))||Number(b.valor)<=0||!validDate(b.data_inicio))return 'Preencha a despesa recorrente corretamente.'};
+router.get('/',auth,async(req,res)=>{const [rows]=await pool.query(`SELECT r.id,r.nome,r.valor,r.dia,r.data_inicio,r.ativa,r.categoria_id,c.nome categoria FROM despesas_recorrentes r JOIN categorias c ON c.id=r.categoria_id WHERE r.usuario_id=? ORDER BY r.ativa DESC,r.nome`,[req.user.id]);res.json(rows)});
+router.post('/',auth,async(req,res)=>{const erro=validate(req.body);if(erro)return res.status(400).json({erro});const {nome,categoria_id,valor,data_inicio}=req.body;const dia=Number(data_inicio.slice(8,10));const [r]=await pool.query('INSERT INTO despesas_recorrentes(usuario_id,categoria_id,nome,valor,dia,data_inicio,ativa) VALUES(?,?,?,?,?,?,1)',[req.user.id,Number(categoria_id),nome.trim(),Number(valor),dia,data_inicio]);res.status(201).json({id:r.insertId})});
+router.put('/:id',auth,async(req,res)=>{const erro=validate(req.body);if(erro)return res.status(400).json({erro});const {nome,categoria_id,valor,data_inicio}=req.body;const dia=Number(data_inicio.slice(8,10));const [r]=await pool.query('UPDATE despesas_recorrentes SET categoria_id=?,nome=?,valor=?,dia=?,data_inicio=? WHERE id=? AND usuario_id=?',[Number(categoria_id),nome.trim(),Number(valor),dia,data_inicio,req.params.id,req.user.id]);if(!r.affectedRows)return res.status(404).json({erro:'Despesa recorrente não encontrada.'});res.json({ok:true})});
+router.patch('/:id/ativa',auth,async(req,res)=>{const ativa=req.body.ativa?1:0;const [r]=await pool.query('UPDATE despesas_recorrentes SET ativa=? WHERE id=? AND usuario_id=?',[ativa,req.params.id,req.user.id]);if(!r.affectedRows)return res.status(404).json({erro:'Despesa recorrente não encontrada.'});res.json({ativa:!!ativa})});
+router.delete('/:id',auth,async(req,res)=>{const [r]=await pool.query('DELETE FROM despesas_recorrentes WHERE id=? AND usuario_id=?',[req.params.id,req.user.id]);if(!r.affectedRows)return res.status(404).json({erro:'Despesa recorrente não encontrada.'});res.json({ok:true})});
+export default router;
